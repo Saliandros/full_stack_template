@@ -6,7 +6,7 @@ namespace Domain.Entities
 	public class DoctorType : BaseEntity
 	{
         [Required]
-        [StringLength(10, MinimumLength = 1, ErrorMessage = "Doctor type name must be longer than 0 characters, and cannot exceed 10 characters.")]
+        [StringLength(100, MinimumLength = 1, ErrorMessage = "Doctor type name must be longer than 0 characters, and cannot exceed 100 characters.")]
         public string Name { get; set; }
 
         [Required]
