@@ -1,13 +1,33 @@
 import type { Route } from "./+types/home";
+import { useState } from "react";
 import { getDepartments } from "../services/apiService";
+
+const menuItems = [
+  "Perioder",
+  "Adgangsstyring",
+  "Afsnit",
+  "Personalegrupper",
+  "Vagtlag",
+  "Ansættelser",
+  "Personale",
+] as const;
+
+type MenuItem = (typeof menuItems)[number];
+
+const titles: Record<MenuItem, string> = {
+  Perioder: "Perioder",
+  Adgangsstyring: "Adgangsstyring",
+  Afsnit: "Afsnit",
+  Personalegrupper: "Personalegrupper",
+  Vagtlag: "Vagtlag",
+  Ansættelser: "Ansættelser",
+  Personale: "Personale",
+};
 
 export function meta({}: Route.MetaArgs) {
   return [
     { title: "Vagtplan" },
-    {
-      name: "description",
-      content: "Frontend der viser forbindelse til backend og database.",
-    },
+    { name: "description", content: "Vagtplan frontend" },
   ];
 }
 
@@ -22,7 +42,6 @@ export async function loader() {
       departments,
       connected: true,
       error: null,
-      fetchedAt: new Date().toISOString(),
     };
   } catch (error) {
     return {
@@ -35,130 +54,116 @@ export async function loader() {
         error instanceof Error
           ? error.message
           : "Ukendt fejl ved hentning af data.",
-      fetchedAt: new Date().toISOString(),
     };
   }
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { apiBaseUrl, connected, departments, error, fetchedAt } = loaderData;
+  const { connected, departments, error } = loaderData;
+  const [activeItem, setActiveItem] = useState<MenuItem>("Afsnit");
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#f3f7f4_0%,#edf3ef_45%,#dfe9e3_100%)] px-6 py-10 text-slate-900">
-      <div className="mx-auto flex max-w-5xl flex-col gap-6">
-        <section className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/80 p-8 shadow-[0_20px_80px_rgba(27,59,43,0.12)] backdrop-blur">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-2xl space-y-4">
-              <span className="inline-flex w-fit items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-800">
-                Frontend ↔ backend ↔ database
-              </span>
-              <div className="space-y-2">
-                <h1 className="text-4xl font-semibold tracking-tight text-slate-950">
-                  Frontenden kan nu vise, at den henter data fra databasen
-                </h1>
-                <p className="text-base leading-7 text-slate-600">
-                  Siden loader afdelinger fra API'et og viser både forbindelsesstatus
-                  og et lille data-preview direkte i interfacet.
-                </p>
-              </div>
+    <main className="min-h-screen bg-[#f4f1ea] p-4 text-slate-900 md:p-6">
+      <div className="mx-auto grid max-w-7xl gap-4 lg:min-h-[calc(100vh-3rem)] lg:grid-cols-[280px_minmax(0,1fr)]">
+        <aside className="rounded-[1.75rem] bg-[#1f2b22] p-4 text-white">
+          <div className="flex h-full flex-col">
+            <div className="border-b border-white/10 px-2 pb-4">
+              <p className="text-xs font-medium uppercase tracking-[0.24em] text-emerald-200/80">
+                Vagtplan
+              </p>
+            </div>
+
+            <nav className="mt-4 flex-1">
+              <ul className="space-y-2">
+                {menuItems.map((item) => {
+                  const isActive = item === activeItem;
+
+                  return (
+                    <li key={item}>
+                      <button
+                        type="button"
+                        onClick={() => setActiveItem(item)}
+                        aria-pressed={isActive}
+                        className={`w-full rounded-2xl px-4 py-3 text-left text-sm transition ${
+                          isActive
+                            ? "bg-[#f0b63f] font-semibold text-slate-950"
+                            : "text-slate-200 hover:bg-white/8"
+                        }`}
+                      >
+                        {item}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </nav>
+          </div>
+        </aside>
+
+        <section className="rounded-[1.75rem] bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] md:p-8">
+          <div className="flex flex-col gap-4 border-b border-slate-200 pb-6 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
+                {titles[activeItem]}
+              </h1>
             </div>
 
             <div
-              className={`w-full max-w-sm rounded-3xl border p-5 ${
+              className={`inline-flex w-fit items-center gap-2 rounded-full px-3 py-2 text-sm ${
                 connected
-                  ? "border-emerald-200 bg-emerald-50"
-                  : "border-rose-200 bg-rose-50"
+                  ? "bg-emerald-50 text-emerald-800"
+                  : "bg-rose-50 text-rose-700"
               }`}
             >
-              <div className="flex items-center gap-3">
-                <span
-                  className={`h-3 w-3 rounded-full ${
-                    connected ? "bg-emerald-500" : "bg-rose-500"
-                  }`}
-                />
-                <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-500">
-                  Datastatus
-                </p>
-              </div>
-              <p className="mt-3 text-2xl font-semibold text-slate-950">
-                {connected ? "Forbundet" : "Ikke forbundet"}
-              </p>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                API: <span className="font-medium text-slate-800">{apiBaseUrl}</span>
-              </p>
-              <p className="text-sm leading-6 text-slate-600">
-                Sidst hentet:{" "}
-                <span className="font-medium text-slate-800">
-                  {new Date(fetchedAt).toLocaleString("da-DK")}
-                </span>
-              </p>
+              <span
+                className={`h-2.5 w-2.5 rounded-full ${
+                  connected ? "bg-emerald-500" : "bg-rose-500"
+                }`}
+              />
+              {connected ? "Forbundet" : "Ikke forbundet"}
             </div>
           </div>
-        </section>
 
-        <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <article className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
-            <div className="flex items-end justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-500">
-                  Afsnit fra databasen
-                </p>
-                <h2 className="mt-2 text-3xl font-semibold text-slate-950">
-                  {departments.length}
-                </h2>
-              </div>
-              <div className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white">
-                {connected ? "Live data" : "Ingen data"}
-              </div>
-            </div>
+          <div className="mt-6">
+            {activeItem === "Afsnit" ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-slate-950">
+                    Afsnit
+                  </h2>
+                  <span className="text-sm text-slate-500">
+                    {departments.length}
+                  </span>
+                </div>
 
-            <div className="mt-6 space-y-3">
-              {departments.length > 0 ? (
-                departments.map((department) => (
-                  <div
-                    key={department.id}
-                    className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-lg font-semibold text-slate-900">
+                {departments.length > 0 ? (
+                  <div className="grid gap-3">
+                    {departments.map((department) => (
+                      <div
+                        key={department.id}
+                        className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"
+                      >
+                        <p className="font-medium text-slate-950">
                           {department.name}
                         </p>
                         <p className="mt-1 text-sm text-slate-600">
                           {department.address}
                         </p>
                       </div>
-                      <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500">
-                        {department.departmentTypeId ? "Type sat" : "Ingen type"}
-                      </span>
-                    </div>
+                    ))}
                   </div>
-                ))
-              ) : (
-                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-sm text-slate-600">
-                  {error || "Der blev ikke fundet nogen afdelinger."}
-                </div>
-              )}
-            </div>
-          </article>
-
-          <aside className="rounded-[2rem] border border-slate-200 bg-slate-950 p-8 text-slate-50 shadow-[0_18px_50px_rgba(15,23,42,0.12)]">
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-400">
-              Hvad det demonstrerer
-            </p>
-            <div className="mt-4 space-y-4 text-sm leading-7 text-slate-300">
-              <p>
-                UI&apos;en viser en klar indikator for om backend-kaldet lykkes.
-              </p>
-              <p>
-                Hvis API&apos;et svarer, vises rækker fra databasen direkte på siden.
-              </p>
-              <p>
-                Hvis forbindelsen fejler, vises fejlen i stedet, så man hurtigt kan se,
-                at problemet ligger i backend, URL eller databaseforbindelsen.
-              </p>
-            </div>
-          </aside>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-8 text-sm text-slate-600">
+                    {error || "Ingen afsnit fundet."}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-10 text-sm text-slate-500">
+                {titles[activeItem]}
+              </div>
+            )}
+          </div>
         </section>
       </div>
     </main>
