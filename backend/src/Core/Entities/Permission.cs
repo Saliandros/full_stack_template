@@ -7,7 +7,7 @@ namespace Domain.Entities
     {
         [Required]
         [StringLength(100, MinimumLength = 3, ErrorMessage = "Permission name must be longer than 3 characters, and cannot exceed 100 characters.")]
-        public string Name { get; set; }
+        public required string Name { get; set; }
 
         [StringLength(100, MinimumLength = 3, ErrorMessage = "Permission name must be longer than 3 characters, and cannot exceed 100 characters.")]
         public bool Read { get; set; }
@@ -22,7 +22,7 @@ namespace Domain.Entities
         public bool Delete { get; set; }
 
         //List refererer til de brugere som har denne permission
-        public List<User> Users { get; set; } = new List<User>();
+        public List<User> Users { get; set; } = [];
 
 
     }

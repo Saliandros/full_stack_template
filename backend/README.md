@@ -20,3 +20,5 @@ Applikationen læser stadig connection stringen på normal .NET-vis via:
 ```csharp
 builder.Configuration.GetConnectionString("DefaultConnection")
 ```
+Start
+dotnet run --project .\src\WebAPI\WebAPI.csproj --launch-profile http

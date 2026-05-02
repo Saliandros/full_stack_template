@@ -88,7 +88,8 @@ namespace WebAPI.Controllers
             {
                 var admin = await _context.Users
                     .AsNoTracking()
-                    .FirstOrDefaultAsync(u => u.Permission.Delete &&
+                    .FirstOrDefaultAsync(u => u.Permission != null &&
+                                             u.Permission.Delete &&
                                              u.Permission.Read &&
                                              u.Permission.Write &&
                                              u.Permission.Edit);

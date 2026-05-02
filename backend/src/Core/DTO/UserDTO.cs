@@ -7,11 +7,11 @@ namespace Domain.DTO
     {
         [Required]
         [StringLength(100, MinimumLength = 1, ErrorMessage = "Initials must be longer than 1 characters, and cannot exceed 100 characters.")]
-        public string Initials { get; set; }
+        public required string Initials { get; set; }
 
         [Required]
         [StringLength(100, MinimumLength = 3, ErrorMessage = "Name must be longer than 3 characters, and cannot exceed 100 characters.")]
-        public string FullName { get; set; }
+        public required string FullName { get; set; }
 
         public UserStatus UserStatus { get; set; }
 

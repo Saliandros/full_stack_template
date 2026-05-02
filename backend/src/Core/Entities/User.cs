@@ -11,11 +11,11 @@ namespace Domain.Entities
     {
         [Required]
         [StringLength(100, MinimumLength = 1, ErrorMessage = "Initials must be longer than 1 characters, and cannot exceed 100 characters.")]
-        public string Initials { get; set; }
+        public required string Initials { get; set; }
 
         [Required]
         [StringLength(100, MinimumLength = 1, ErrorMessage = "Full name must be longer than 1 characters, and cannot exceed 100 characters.")]
-        public string FullName { get; set; }
+        public required string FullName { get; set; }
         public UserStatus UserStatus { get; set; }
 
         //FK refererer til den department, som en bruger er tilknyttet til.
@@ -35,7 +35,7 @@ namespace Domain.Entities
 
 
         //Liste refererer til de employmentperiods en user måtte have. Vil i 99% af tilfælde bare være 1 employment, men giver trods alt muligheden for, at en user kan have mere end én employmentperiod på én gang.
-        public List<EmploymentPeriod> EmploymentPeriods { get; set; }
+        public List<EmploymentPeriod> EmploymentPeriods { get; set; } = [];
 
         public User() { }
     }

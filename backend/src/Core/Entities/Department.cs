@@ -10,23 +10,23 @@ namespace Domain.Entities
 
         [Required]
         [StringLength(100, MinimumLength = 3, ErrorMessage = "Department name has to be longer than 3 characters, and it can't exceed 100 characters")] 
-        public string Name { get; set; }
+        public required string Name { get; set; }
 
         [Required]
         [StringLength(100, MinimumLength = 3, ErrorMessage = "Department address has to be longer than 3 characters, and it can't exceed 100 characters.")]
-		public string Address { get; set; }
+		public required string Address { get; set; }
 
         //FK refererer til den departmenttype, som denne department tilhører.
         [Range(0, int.MaxValue, ErrorMessage = "ID number must be between 0 and int32")]
         public Guid? DepartmentTypeId { get; set; }
 
-		public DepartmentType DepartmentType { get; set; }
+		public DepartmentType? DepartmentType { get; set; }
 
 		//Samling af en departments tilknyttede usere. Foreign key for department findes i User model.
-		public List<User> Users { get; set; } = new List<User>();
+		public List<User> Users { get; set; } = [];
 
 		//Samling af doctor typer som er tilknyttet til en department
-		public List<DoctorType> DoctorTypes { get; set; } = new List<DoctorType>();
+		public List<DoctorType> DoctorTypes { get; set; } = [];
 
 		public Department() { }
 

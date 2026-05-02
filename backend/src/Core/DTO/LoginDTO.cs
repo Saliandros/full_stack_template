@@ -8,11 +8,11 @@ namespace Domain.DTO
         [Required]
         [StringLength(150, MinimumLength = 3, ErrorMessage = "DEmail must be longer than 3 characters, and cannot exceed 150 characters.")]
         [EmailAddress]
-        public string Email { get; set; }
+        public required string Email { get; set; }
 
         [Required]
         [StringLength(255, ErrorMessage = "Password must be between 5 and 255 characters", MinimumLength = 5)]
         [DataType(DataType.Password)]
-        public string Password { get; set; }
+        public required string Password { get; set; }
     }
 }
