@@ -1,12 +1,5 @@
 import { useState, type ReactNode } from "react";
 import { Form } from "react-router";
-import { AdgangsstyringMenuItem } from "./menu-items/AdgangsstyringMenuItem";
-import { AfsnitMenuItem } from "./menu-items/AfsnitMenuItem";
-import { AnsaettelserMenuItem } from "./menu-items/AnsaettelserMenuItem";
-import { PerioderMenuItem } from "./menu-items/PerioderMenuItem";
-import { PersonalegrupperMenuItem } from "./menu-items/PersonalegrupperMenuItem";
-import { PersonaleMenuItem } from "./menu-items/PersonaleMenuItem";
-import { VagtlagMenuItem } from "./menu-items/VagtlagMenuItem";
 
 export type HomeSidebarItem =
   | "Perioder"
@@ -17,9 +10,46 @@ export type HomeSidebarItem =
   | "Ansaettelser"
   | "Personale";
 
+const sidebarItems: HomeSidebarItem[] = [
+  "Perioder",
+  "Adgangsstyring",
+  "Afsnit",
+  "Personalegrupper",
+  "Vagtlag",
+  "Ansaettelser",
+  "Personale",
+];
+
 type HomeSidebarProps = {
   children: (activeItem: HomeSidebarItem) => ReactNode;
 };
+
+function SidebarMenuButton({
+  label,
+  isActive,
+  onClick,
+}: {
+  label: string;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={isActive}
+        className={`w-full rounded-2xl px-4 py-3 text-left text-sm transition ${
+          isActive
+            ? "bg-[#f0b63f] font-semibold text-slate-950"
+            : "text-slate-200 hover:bg-white/8"
+        }`}
+      >
+        {label}
+      </button>
+    </li>
+  );
+}
 
 export function HomeSidebar({ children }: HomeSidebarProps) {
   const [activeItem, setActiveItem] = useState<HomeSidebarItem>("Afsnit");
@@ -36,34 +66,14 @@ export function HomeSidebar({ children }: HomeSidebarProps) {
 
           <nav className="mt-4 flex-1">
             <ul className="space-y-2">
-              <PerioderMenuItem
-                isActive={activeItem === "Perioder"}
-                onClick={() => setActiveItem("Perioder")}
-              />
-              <AdgangsstyringMenuItem
-                isActive={activeItem === "Adgangsstyring"}
-                onClick={() => setActiveItem("Adgangsstyring")}
-              />
-              <AfsnitMenuItem
-                isActive={activeItem === "Afsnit"}
-                onClick={() => setActiveItem("Afsnit")}
-              />
-              <PersonalegrupperMenuItem
-                isActive={activeItem === "Personalegrupper"}
-                onClick={() => setActiveItem("Personalegrupper")}
-              />
-              <VagtlagMenuItem
-                isActive={activeItem === "Vagtlag"}
-                onClick={() => setActiveItem("Vagtlag")}
-              />
-              <AnsaettelserMenuItem
-                isActive={activeItem === "Ansaettelser"}
-                onClick={() => setActiveItem("Ansaettelser")}
-              />
-              <PersonaleMenuItem
-                isActive={activeItem === "Personale"}
-                onClick={() => setActiveItem("Personale")}
-              />
+              {sidebarItems.map((item) => (
+                <SidebarMenuButton
+                  key={item}
+                  label={item}
+                  isActive={activeItem === item}
+                  onClick={() => setActiveItem(item)}
+                />
+              ))}
             </ul>
           </nav>
 
