@@ -1,6 +1,11 @@
+import { Form, redirect } from "react-router";
 import type { Route } from "./+types/home";
 import { useState } from "react";
 import { getDepartments } from "../services/apiService";
+import {
+  destroyUserSession,
+  requireUserSession,
+} from "../services/session.server";
 
 const menuItems = [
   "Perioder",
@@ -31,23 +36,19 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
-export async function loader() {
+export async function loader({ request }: Route.LoaderArgs) {
+  await requireUserSession(request);
+
   try {
     const departments = await getDepartments();
 
     return {
-      apiBaseUrl: (import.meta.env.VITE_API_BASE_URL || "http://localhost:5166")
-        .trim()
-        .replace(/\/$/, ""),
       departments,
       connected: true,
       error: null,
     };
   } catch (error) {
     return {
-      apiBaseUrl: (import.meta.env.VITE_API_BASE_URL || "http://localhost:5166")
-        .trim()
-        .replace(/\/$/, ""),
       departments: [],
       connected: false,
       error:
@@ -56,6 +57,17 @@ export async function loader() {
           : "Ukendt fejl ved hentning af data.",
     };
   }
+}
+
+export async function action({ request }: Route.ActionArgs) {
+  const formData = await request.formData();
+  const intent = formData.get("intent");
+
+  if (intent === "logout") {
+    return destroyUserSession(request);
+  }
+
+  throw redirect("/");
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
@@ -97,16 +109,24 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 })}
               </ul>
             </nav>
+
+            <Form method="post" className="mt-4 border-t border-white/10 pt-4">
+              <input type="hidden" name="intent" value="logout" />
+              <button
+                type="submit"
+                className="w-full rounded-2xl border border-white/12 px-4 py-3 text-left text-sm font-medium text-slate-200 transition hover:bg-white/8"
+              >
+                Log ud
+              </button>
+            </Form>
           </div>
         </aside>
 
         <section className="rounded-[1.75rem] bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] md:p-8">
           <div className="flex flex-col gap-4 border-b border-slate-200 pb-6 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
-                {titles[activeItem]}
-              </h1>
-            </div>
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
+              {titles[activeItem]}
+            </h1>
 
             <div
               className={`inline-flex w-fit items-center gap-2 rounded-full px-3 py-2 text-sm ${
