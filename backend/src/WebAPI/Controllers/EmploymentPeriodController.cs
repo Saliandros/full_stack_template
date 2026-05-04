@@ -1,11 +1,9 @@
-﻿using Domain.DTO;
+using System.Data.Common;
+using Domain.DTO;
 using Domain.Entities;
-using Infrastructure.Mapping;
 using Infrastructure.Persistence.Contexts;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Data.Common;
-
 
 namespace WebAPI.Controllers
 {
@@ -13,6 +11,8 @@ namespace WebAPI.Controllers
     [Route("api/[controller]")]
     public class EmploymentPeriodController : ControllerBase
     {
+        private const string StaffClaimType = "is_staff";
+
         private readonly VagtplanDbContext _context;
         private readonly ILogger<EmploymentPeriodController> _logger;
 
@@ -22,51 +22,37 @@ namespace WebAPI.Controllers
             _logger = logger;
         }
 
-        [HttpGet("{employmentPeriodId}")]
-        public async Task<IActionResult> GetById(Guid employmentPeriodId)
+        [HttpGet("admin")]
+        public async Task<IActionResult> GetAdminEmploymentList()
         {
             try
             {
-                var employmentPeriod = await _context.EmploymentPeriods
+                var employments = await _context.EmploymentPeriods
                     .AsNoTracking()
-                    .FirstOrDefaultAsync(e => e.Id == employmentPeriodId);
-
-                if (employmentPeriod == null)
-                {
-                    _logger.LogWarning("Employment period {EmploymentPeriodId} not found", employmentPeriodId);
-                    return NotFound(new { message = "Employment period not found" });
-                }
-
-                return Ok(employmentPeriod.ToDTO());
-            }
-            catch (DbException dbEx)
-            {
-                _logger.LogError(dbEx, "Database error occurred while retrieving employment period {EmploymentPeriodId}", employmentPeriodId);
-                return StatusCode(500, new { message = "A database error occurred" });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unexpected error occurred while retrieving employment period {EmploymentPeriodId}", employmentPeriodId);
-                return StatusCode(500, new { message = "An unexpected error occurred" });
-            }
-        }
-
-        [HttpGet("GetAll")]
-        public async Task<IActionResult> GetAll()
-        {
-            try
-            {
-                var employmentPeriods = await _context.EmploymentPeriods
-                    .AsNoTracking()
+                    .Include(employment => employment.User)
+                    .Include(employment => employment.Department)
+                    .Include(employment => employment.DoctorType)
+                    .Include(employment => employment.ShiftTeam)
+                    .OrderBy(employment => employment.User != null ? employment.User.FullName : string.Empty)
+                    .ThenBy(employment => employment.StartDate)
+                    .Select(employment => new EmploymentAdminDto
+                    {
+                        Id = employment.Id,
+                        UserId = employment.UserId ?? Guid.Empty,
+                        UserName = employment.User != null ? employment.User.FullName : string.Empty,
+                        DepartmentId = employment.DepartmentId ?? Guid.Empty,
+                        DepartmentName = employment.Department != null ? employment.Department.Name : string.Empty,
+                        PersonnelGroupId = employment.DoctorTypeId ?? Guid.Empty,
+                        PersonnelGroupName = employment.DoctorType != null ? employment.DoctorType.Name : string.Empty,
+                        ShiftTeamId = employment.ShiftTeamId ?? Guid.Empty,
+                        ShiftTeamName = employment.ShiftTeam != null ? employment.ShiftTeam.Name : string.Empty,
+                        HoursPerWeek = employment.HoursPerWeek,
+                        StartDate = employment.StartDate,
+                        EndDate = employment.EndDate ?? employment.StartDate,
+                    })
                     .ToListAsync();
 
-                if (!employmentPeriods.Any())
-                {
-                    _logger.LogWarning("No employment periods found");
-                    return NotFound(new { message = "No employment periods found" });
-                }
-
-                return Ok(employmentPeriods);
+                return Ok(employments);
             }
             catch (DbException dbEx)
             {
@@ -80,61 +66,96 @@ namespace WebAPI.Controllers
             }
         }
 
-
-        [HttpGet("GetForUser/{userId}")]
-        public async Task<IActionResult> GetForUser(Guid userId)
+        [HttpGet("personnel")]
+        public async Task<IActionResult> GetPersonnel([FromQuery] DateTime? startDate, [FromQuery] DateTime? endDate)
         {
             try
             {
-                var employmentPeriods = await _context.Users
-                    .Where(u => u.Id == userId)
-                    .Select(u => u.EmploymentPeriods)
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync();
-
-                if (employmentPeriods == null)
+                if (startDate.HasValue && endDate.HasValue && endDate.Value.Date < startDate.Value.Date)
                 {
-                    _logger.LogWarning("No employment periods found for user {UserId}", userId);
-                    return NotFound(new { message = "No employment periods found for this user" });
+                    return BadRequest(new { message = "Slutdato skal være efter eller lig med startdato." });
                 }
 
-                return Ok(employmentPeriods.Select(e => e.ToDTO()));
+                var query = _context.EmploymentPeriods
+                    .AsNoTracking()
+                    .Include(employment => employment.User)
+                    .Include(employment => employment.Department)
+                    .Include(employment => employment.DoctorType)
+                    .Include(employment => employment.ShiftTeam)
+                    .Where(employment => employment.User != null &&
+                        employment.Department != null &&
+                        employment.DoctorType != null &&
+                        employment.ShiftTeam != null);
+
+                if (startDate.HasValue)
+                {
+                    var filterStart = startDate.Value.Date;
+                    query = query.Where(employment =>
+                        (employment.EndDate ?? DateTime.MaxValue).Date >= filterStart);
+                }
+
+                if (endDate.HasValue)
+                {
+                    var filterEnd = endDate.Value.Date;
+                    query = query.Where(employment => employment.StartDate.Date <= filterEnd);
+                }
+
+                var personnel = await query
+                    .OrderBy(employment => employment.User!.FullName)
+                    .ThenBy(employment => employment.StartDate)
+                    .Select(employment => new PersonnelRowDto
+                    {
+                        Name = employment.User!.FullName,
+                        DepartmentName = employment.Department!.Name,
+                        PersonnelGroupName = employment.DoctorType!.Name,
+                        ShiftTeamName = employment.ShiftTeam!.Name,
+                        HoursPerWeek = employment.HoursPerWeek,
+                        StartDate = employment.StartDate,
+                        EndDate = employment.EndDate ?? employment.StartDate,
+                    })
+                    .ToListAsync();
+
+                return Ok(personnel);
             }
             catch (DbException dbEx)
             {
-                _logger.LogError(dbEx, "Database error occurred while retrieving employment periods for user {UserId}", userId);
+                _logger.LogError(dbEx, "Database error occurred while retrieving personnel");
                 return StatusCode(500, new { message = "A database error occurred" });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unexpected error occurred while retrieving employment periods for user {UserId}", userId);
+                _logger.LogError(ex, "Unexpected error occurred while retrieving personnel");
                 return StatusCode(500, new { message = "An unexpected error occurred" });
             }
         }
 
-        [HttpPost("Add")]
-        public async Task<IActionResult> Create([FromBody] EmploymentPeriodDTO dto)
+        [HttpPost("admin")]
+        public async Task<IActionResult> CreateAdminEmployment([FromBody] EmploymentAdminDto dto)
         {
             try
             {
-                if (dto == null)
+                var validation = await ValidateEmploymentAsync(dto, null);
+                if (validation != null)
                 {
-                    _logger.LogWarning("DTO was null");
-                    return BadRequest(new { message = "DTO wasn't provided" });
+                    return validation;
                 }
 
-                if (dto.StartDate == default)
+                var employment = new EmploymentPeriod
                 {
-                    _logger.LogWarning("StartDate is required");
-                    return BadRequest(new { message = "StartDate is required" });
-                }
+                    Id = Guid.NewGuid(),
+                    UserId = dto.UserId,
+                    DepartmentId = dto.DepartmentId,
+                    DoctorTypeId = dto.PersonnelGroupId,
+                    ShiftTeamId = dto.ShiftTeamId,
+                    HoursPerWeek = dto.HoursPerWeek,
+                    StartDate = dto.StartDate.Date,
+                    EndDate = dto.EndDate.Date,
+                };
 
-                var employmentPeriod = dto.ToEntity();
-
-                await _context.EmploymentPeriods.AddAsync(employmentPeriod);
+                await _context.EmploymentPeriods.AddAsync(employment);
                 await _context.SaveChangesAsync();
 
-                return Ok(employmentPeriod.ToDTO());
+                return Ok(await MapEmploymentAsync(employment.Id));
             }
             catch (DbException dbEx)
             {
@@ -148,70 +169,62 @@ namespace WebAPI.Controllers
             }
         }
 
-        [HttpPut("Update")]
-        public async Task<IActionResult> Update([FromBody] EmploymentPeriod entity)
+        [HttpPut("admin/{id:guid}")]
+        public async Task<IActionResult> UpdateAdminEmployment(Guid id, [FromBody] EmploymentAdminDto dto)
         {
             try
             {
-                if (entity == null)
+                var existingEmployment = await _context.EmploymentPeriods.FirstOrDefaultAsync(employment => employment.Id == id);
+                if (existingEmployment == null)
                 {
-                    _logger.LogWarning("DTO was null");
-                    return BadRequest(new { message = "DTO wasn't provided" });
+                    return NotFound(new { message = "Ansættelsen blev ikke fundet." });
                 }
 
-                var existingEmploymentPeriod = await _context.EmploymentPeriods
-                    .FirstOrDefaultAsync(e => e.Id == entity.Id);
-
-                if (existingEmploymentPeriod == null)
+                var validation = await ValidateEmploymentAsync(dto, id);
+                if (validation != null)
                 {
-                    _logger.LogWarning("Employment period {EmploymentPeriodId} not found", entity.Id);
-                    return NotFound(new { message = "Employment period not found" });
+                    return validation;
                 }
 
-                existingEmploymentPeriod.StartDate = entity.StartDate;
-                existingEmploymentPeriod.EndDate = entity.EndDate;
-                existingEmploymentPeriod.UserId = entity.UserId;
+                existingEmployment.UserId = dto.UserId;
+                existingEmployment.DepartmentId = dto.DepartmentId;
+                existingEmployment.DoctorTypeId = dto.PersonnelGroupId;
+                existingEmployment.ShiftTeamId = dto.ShiftTeamId;
+                existingEmployment.HoursPerWeek = dto.HoursPerWeek;
+                existingEmployment.StartDate = dto.StartDate.Date;
+                existingEmployment.EndDate = dto.EndDate.Date;
 
                 await _context.SaveChangesAsync();
 
-                return Ok(existingEmploymentPeriod.ToDTO());
+                return Ok(await MapEmploymentAsync(existingEmployment.Id));
             }
             catch (DbException dbEx)
             {
-                _logger.LogError(dbEx, "Database error occurred while updating employment period {EmploymentPeriodId}", entity.Id);
+                _logger.LogError(dbEx, "Database error occurred while updating employment period {EmploymentPeriodId}", id);
                 return StatusCode(500, new { message = "A database error occurred" });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unexpected error occurred while updating employment period {EmploymentPeriodId}", entity.Id);
+                _logger.LogError(ex, "Unexpected error occurred while updating employment period {EmploymentPeriodId}", id);
                 return StatusCode(500, new { message = "An unexpected error occurred" });
             }
         }
 
-        [HttpDelete("Delete/{id}")]
-        public async Task<IActionResult> Delete(Guid id)
+        [HttpDelete("admin/{id:guid}")]
+        public async Task<IActionResult> DeleteAdminEmployment(Guid id)
         {
             try
             {
-                if (id == default)
+                var employment = await _context.EmploymentPeriods.FindAsync(id);
+                if (employment == null)
                 {
-                    _logger.LogWarning("Id was null");
-                    return BadRequest(new { message = "Id wasn't provided" });
+                    return NotFound(new { message = "Ansættelsen blev ikke fundet." });
                 }
 
-                var employmentPeriod = await _context.EmploymentPeriods
-                    .FindAsync(id);
-
-                if (employmentPeriod == null)
-                {
-                    _logger.LogWarning("Employment period {EmploymentPeriodId} not found", id);
-                    return NotFound(new { message = "Employment period not found" });
-                }
-
-                _context.EmploymentPeriods.Remove(employmentPeriod);
+                _context.EmploymentPeriods.Remove(employment);
                 await _context.SaveChangesAsync();
 
-                return Ok(employmentPeriod.ToDTO());
+                return Ok(new { id });
             }
             catch (DbException dbEx)
             {
@@ -223,6 +236,121 @@ namespace WebAPI.Controllers
                 _logger.LogError(ex, "Unexpected error occurred while deleting employment period {EmploymentPeriodId}", id);
                 return StatusCode(500, new { message = "An unexpected error occurred" });
             }
+        }
+
+        private async Task<IActionResult?> ValidateEmploymentAsync(EmploymentAdminDto dto, Guid? currentEmploymentId)
+        {
+            if (dto.UserId == Guid.Empty ||
+                dto.DepartmentId == Guid.Empty ||
+                dto.PersonnelGroupId == Guid.Empty ||
+                dto.ShiftTeamId == Guid.Empty)
+            {
+                return BadRequest(new { message = "Alle felter skal udfyldes." });
+            }
+
+            if (dto.HoursPerWeek < 0 || dto.HoursPerWeek > 37)
+            {
+                return BadRequest(new { message = "Timer pr. uge skal være mellem 0 og 37." });
+            }
+
+            if (dto.EndDate.Date <= dto.StartDate.Date)
+            {
+                return BadRequest(new { message = "Slutdato skal være efter startdato." });
+            }
+
+            var userExists = await _context.Users
+                .AsNoTracking()
+                .AnyAsync(user => user.Id == dto.UserId);
+
+            if (!userExists)
+            {
+                return BadRequest(new { message = "Den valgte person blev ikke fundet." });
+            }
+
+            var isStaffUser = await _context.UserClaims
+                .AsNoTracking()
+                .AnyAsync(claim =>
+                    claim.UserId == dto.UserId &&
+                    claim.ClaimType == StaffClaimType &&
+                    (claim.ClaimValue == bool.TrueString || claim.ClaimValue == "true"));
+
+            if (!isStaffUser)
+            {
+                return BadRequest(new { message = "Den valgte person skal have rollen Personale." });
+            }
+
+            var departmentExists = await _context.Departments
+                .AsNoTracking()
+                .AnyAsync(department => department.Id == dto.DepartmentId);
+            var personnelGroupExists = await _context.DoctorTypes
+                .AsNoTracking()
+                .AnyAsync(group => group.Id == dto.PersonnelGroupId);
+            var shiftTeamExists = await _context.ShiftTeams
+                .AsNoTracking()
+                .AnyAsync(shiftTeam => shiftTeam.Id == dto.ShiftTeamId);
+
+            if (!departmentExists || !personnelGroupExists || !shiftTeamExists)
+            {
+                return BadRequest(new { message = "Et eller flere valgte felter blev ikke fundet." });
+            }
+
+            var overlappingEmployment = await _context.EmploymentPeriods
+                .AsNoTracking()
+                .Where(employment => employment.UserId == dto.UserId)
+                .Where(employment => currentEmploymentId == null || employment.Id != currentEmploymentId)
+                .Where(employment =>
+                    employment.StartDate.Date <= dto.EndDate.Date &&
+                    (employment.EndDate ?? DateTime.MaxValue).Date >= dto.StartDate.Date)
+                .Select(employment => new
+                {
+                    employment.StartDate,
+                    employment.EndDate,
+                })
+                .FirstOrDefaultAsync();
+
+            if (overlappingEmployment != null)
+            {
+                var overlappingStart = overlappingEmployment.StartDate.ToString("dd-MM-yyyy");
+                var overlappingEnd = overlappingEmployment.EndDate.HasValue
+                    ? overlappingEmployment.EndDate.Value.ToString("dd-MM-yyyy")
+                    : "løbende";
+
+                return Conflict(new
+                {
+                    message =
+                        $"Ansættelsen kan ikke gemmes, fordi perioden overlapper med en eksisterende ansættelse ({overlappingStart} - {overlappingEnd}). " +
+                        "Ansættelsesperioder må ikke overlappe for samme person. Afslut eller redigér den eksisterende ansættelse først.",
+                });
+            }
+
+            return null;
+        }
+
+        private async Task<EmploymentAdminDto> MapEmploymentAsync(Guid id)
+        {
+            var employment = await _context.EmploymentPeriods
+                .AsNoTracking()
+                .Include(item => item.User)
+                .Include(item => item.Department)
+                .Include(item => item.DoctorType)
+                .Include(item => item.ShiftTeam)
+                .FirstAsync(item => item.Id == id);
+
+            return new EmploymentAdminDto
+            {
+                Id = employment.Id,
+                UserId = employment.UserId ?? Guid.Empty,
+                UserName = employment.User?.FullName ?? string.Empty,
+                DepartmentId = employment.DepartmentId ?? Guid.Empty,
+                DepartmentName = employment.Department?.Name ?? string.Empty,
+                PersonnelGroupId = employment.DoctorTypeId ?? Guid.Empty,
+                PersonnelGroupName = employment.DoctorType?.Name ?? string.Empty,
+                ShiftTeamId = employment.ShiftTeamId ?? Guid.Empty,
+                ShiftTeamName = employment.ShiftTeam?.Name ?? string.Empty,
+                HoursPerWeek = employment.HoursPerWeek,
+                StartDate = employment.StartDate,
+                EndDate = employment.EndDate ?? employment.StartDate,
+            };
         }
     }
 }

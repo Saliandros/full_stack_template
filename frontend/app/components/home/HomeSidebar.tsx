@@ -20,6 +20,16 @@ const sidebarItems: HomeSidebarItem[] = [
   "Personale",
 ];
 
+const sidebarLabels: Record<HomeSidebarItem, string> = {
+  Perioder: "Perioder",
+  Adgangsstyring: "Adgangsstyring",
+  Afsnit: "Afsnit",
+  Personalegrupper: "Personalegrupper",
+  Vagtlag: "Vagtlag",
+  Ansaettelser: "Ansættelser",
+  Personale: "Personale",
+};
+
 type HomeSidebarProps = {
   children: (activeItem: HomeSidebarItem) => ReactNode;
 };
@@ -52,7 +62,7 @@ function SidebarMenuButton({
 }
 
 export function HomeSidebar({ children }: HomeSidebarProps) {
-  const [activeItem, setActiveItem] = useState<HomeSidebarItem>("Adgangsstyring");
+  const [activeItem, setActiveItem] = useState<HomeSidebarItem>("Perioder");
 
   return (
     <>
@@ -69,7 +79,7 @@ export function HomeSidebar({ children }: HomeSidebarProps) {
               {sidebarItems.map((item) => (
                 <SidebarMenuButton
                   key={item}
-                  label={item}
+                  label={sidebarLabels[item]}
                   isActive={activeItem === item}
                   onClick={() => setActiveItem(item)}
                 />

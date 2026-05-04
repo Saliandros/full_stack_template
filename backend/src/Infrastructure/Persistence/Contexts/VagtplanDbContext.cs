@@ -1,4 +1,3 @@
-﻿
 
 using Domain.Entities;
 using Domain.Enums;
@@ -6,7 +5,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-
 
 namespace Infrastructure.Persistence.Contexts
 {
@@ -28,6 +26,7 @@ namespace Infrastructure.Persistence.Contexts
         public DbSet<DoctorType> DoctorTypes { get; set; }
         public DbSet<EmploymentPeriod> EmploymentPeriods { get; set; }
         public DbSet<Permission> Permissions { get; set; }
+        public DbSet<ShiftTeam> ShiftTeams { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -36,37 +35,63 @@ namespace Infrastructure.Persistence.Contexts
             modelBuilder.Entity<Department>(entity =>
             {
                 entity.HasOne(d => d.DepartmentType)
-                      .WithMany()
-                      .HasForeignKey(d => d.DepartmentTypeId)
-                      .OnDelete(DeleteBehavior.SetNull);
+                    .WithMany()
+                    .HasForeignKey(d => d.DepartmentTypeId)
+                    .OnDelete(DeleteBehavior.SetNull);
 
                 entity.HasMany(d => d.DoctorTypes)
-                      .WithOne()
-                      .HasForeignKey(dt => dt.DepartmentId)
-                      .OnDelete(DeleteBehavior.SetNull);
+                    .WithOne()
+                    .HasForeignKey(dt => dt.DepartmentId)
+                    .OnDelete(DeleteBehavior.SetNull);
             });
 
             modelBuilder.Entity<User>(entity =>
             {
                 entity.HasOne(u => u.Department)
-                      .WithMany(d => d.Users)
-                      .HasForeignKey(u => u.DepartmentId)
-                      .OnDelete(DeleteBehavior.SetNull);
+                    .WithMany(d => d.Users)
+                    .HasForeignKey(u => u.DepartmentId)
+                    .OnDelete(DeleteBehavior.SetNull);
 
                 entity.HasOne(u => u.DoctorType)
-                      .WithMany(dt => dt.Users)
-                      .HasForeignKey(u => u.DoctorTypeId)
-                      .OnDelete(DeleteBehavior.SetNull);
+                    .WithMany(dt => dt.Users)
+                    .HasForeignKey(u => u.DoctorTypeId)
+                    .OnDelete(DeleteBehavior.SetNull);
 
                 entity.HasOne(u => u.Permission)
-                      .WithMany(p => p.Users)
-                      .HasForeignKey(u => u.PermissionId)
-                      .OnDelete(DeleteBehavior.SetNull);
+                    .WithMany(p => p.Users)
+                    .HasForeignKey(u => u.PermissionId)
+                    .OnDelete(DeleteBehavior.SetNull);
 
                 entity.HasMany(u => u.EmploymentPeriods)
-                      .WithOne(ep => ep.User)
-                      .HasForeignKey(ep => ep.UserId)
-                      .OnDelete(DeleteBehavior.Cascade);
+                    .WithOne(ep => ep.User)
+                    .HasForeignKey(ep => ep.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<ShiftTeam>(entity =>
+            {
+                entity.HasMany(shiftTeam => shiftTeam.EmploymentPeriods)
+                    .WithOne(employmentPeriod => employmentPeriod.ShiftTeam)
+                    .HasForeignKey(employmentPeriod => employmentPeriod.ShiftTeamId)
+                    .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            modelBuilder.Entity<EmploymentPeriod>(entity =>
+            {
+                entity.HasOne(employmentPeriod => employmentPeriod.Department)
+                    .WithMany()
+                    .HasForeignKey(employmentPeriod => employmentPeriod.DepartmentId)
+                    .OnDelete(DeleteBehavior.SetNull);
+
+                entity.HasOne(employmentPeriod => employmentPeriod.DoctorType)
+                    .WithMany()
+                    .HasForeignKey(employmentPeriod => employmentPeriod.DoctorTypeId)
+                    .OnDelete(DeleteBehavior.SetNull);
+
+                entity.HasOne(employmentPeriod => employmentPeriod.ShiftTeam)
+                    .WithMany(shiftTeam => shiftTeam.EmploymentPeriods)
+                    .HasForeignKey(employmentPeriod => employmentPeriod.ShiftTeamId)
+                    .OnDelete(DeleteBehavior.SetNull);
             });
         }
 
@@ -137,14 +162,29 @@ namespace Infrastructure.Persistence.Contexts
                 }
             }
 
+            if (!ShiftTeams.Any())
+            {
+                var shiftTeams = new List<ShiftTeam>
+                {
+                    new() { Id = Guid.NewGuid(), Name = "Forvagt" },
+                    new() { Id = Guid.NewGuid(), Name = "Mellemvagt" },
+                    new() { Id = Guid.NewGuid(), Name = "Bagvagt" }
+                };
+
+                ShiftTeams.AddRange(shiftTeams);
+                SaveChanges();
+                _logger.LogInformation("Added Shift Teams");
+            }
+
             if (!Users.Any())
             {
                 var department = Departments.FirstOrDefault();
                 var doctorType = DoctorTypes.FirstOrDefault();
+                var shiftTeam = ShiftTeams.FirstOrDefault();
                 var adminPermission = Permissions.FirstOrDefault(p => p.Name == "Admin");
                 var userPermission = Permissions.FirstOrDefault(p => p.Name == "User");
 
-                if (department != null && doctorType != null && adminPermission != null && userPermission != null)
+                if (department != null && doctorType != null && shiftTeam != null && adminPermission != null && userPermission != null)
                 {
                     var hasher = new PasswordHasher<User>();
 
@@ -193,15 +233,25 @@ namespace Infrastructure.Persistence.Contexts
                     var adminEmployment = new EmploymentPeriod
                     {
                         Id = Guid.NewGuid(),
+                        HoursPerWeek = 37,
                         StartDate = DateTime.Now.AddYears(-2),
-                        UserId = adminUser.Id
+                        EndDate = DateTime.Now.AddYears(5),
+                        UserId = adminUser.Id,
+                        DepartmentId = department.Id,
+                        DoctorTypeId = doctorType.Id,
+                        ShiftTeamId = shiftTeam.Id,
                     };
 
                     var regularEmployment = new EmploymentPeriod
                     {
                         Id = Guid.NewGuid(),
+                        HoursPerWeek = 37,
                         StartDate = DateTime.Now.AddYears(-1),
-                        UserId = regularUser.Id
+                        EndDate = DateTime.Now.AddYears(5),
+                        UserId = regularUser.Id,
+                        DepartmentId = department.Id,
+                        DoctorTypeId = doctorType.Id,
+                        ShiftTeamId = shiftTeam.Id,
                     };
 
                     EmploymentPeriods.AddRange(new[] { adminEmployment, regularEmployment });
@@ -224,21 +274,34 @@ namespace Infrastructure.Persistence.Contexts
                 EnsureBooleanClaim(seededUser.Id, AdminClaimType, false);
                 EnsureBooleanClaim(seededUser.Id, StaffClaimType, true);
             }
+
+            // Existing users with employment rows must be treated as staff to keep
+            // the access-management claims consistent with employment data.
+            foreach (var employedUserId in EmploymentPeriods
+                .Where(employment => employment.UserId != null)
+                .Select(employment => employment.UserId!.Value)
+                .Distinct()
+                .ToList())
+            {
+                EnsureBooleanClaim(employedUserId, StaffClaimType, true);
+            }
         }
 
         private void EnsureBooleanClaim(Guid userId, string claimType, bool value)
         {
             var existingClaims = UserClaims.Where(claim => claim.UserId == userId && claim.ClaimType == claimType);
+            var expectedValue = value.ToString();
 
             if (!existingClaims.Any(claim =>
-                string.Equals(claim.ClaimValue, value.ToString(), StringComparison.OrdinalIgnoreCase)))
+                claim.ClaimValue == expectedValue ||
+                claim.ClaimValue == expectedValue.ToLowerInvariant()))
             {
                 UserClaims.RemoveRange(existingClaims);
                 UserClaims.Add(new IdentityUserClaim<Guid>
                 {
                     UserId = userId,
                     ClaimType = claimType,
-                    ClaimValue = value.ToString(),
+                    ClaimValue = expectedValue,
                 });
                 SaveChanges();
             }

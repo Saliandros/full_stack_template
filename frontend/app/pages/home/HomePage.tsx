@@ -3,12 +3,35 @@ import {
   type HomeSidebarItem,
 } from "../../components/home/HomeSidebar";
 import { AccessManagementSection } from "../../components/home/AccessManagementSection";
-import type { AccessManagementUser } from "../../services/apiService";
+import { DepartmentSection } from "../../components/home/DepartmentSection";
+import { EmploymentSection } from "../../components/home/EmploymentSection";
+import { PeriodOverviewSection } from "../../components/home/PeriodOverviewSection";
+import { PersonnelGroupSection } from "../../components/home/PersonnelGroupSection";
+import { PersonnelSection } from "../../components/home/PersonnelSection";
+import { ShiftTeamSection } from "../../components/home/ShiftTeamSection";
+import type {
+  AccessManagementUser,
+  Department,
+  Employment,
+  PersonnelGroup,
+  PersonnelRow,
+  ShiftTeam,
+} from "../../services/apiService";
 
 type HomePageProps = {
   connected: boolean;
   users: AccessManagementUser[];
   usersError: string | null;
+  departments: Department[];
+  departmentsError: string | null;
+  personnelGroups: PersonnelGroup[];
+  personnelGroupsError: string | null;
+  shiftTeams: ShiftTeam[];
+  shiftTeamsError: string | null;
+  employments: Employment[];
+  employmentsError: string | null;
+  personnel: PersonnelRow[];
+  personnelError: string | null;
   currentUserIsAdmin: boolean;
 };
 
@@ -18,7 +41,7 @@ const titles: Record<HomeSidebarItem, string> = {
   Afsnit: "Afsnit",
   Personalegrupper: "Personalegrupper",
   Vagtlag: "Vagtlag",
-  Ansaettelser: "Ansaettelser",
+  Ansaettelser: "Ansættelser",
   Personale: "Personale",
 };
 
@@ -26,8 +49,27 @@ function renderSection(
   activeItem: HomeSidebarItem,
   users: AccessManagementUser[],
   usersError: string | null,
+  departments: Department[],
+  departmentsError: string | null,
+  personnelGroups: PersonnelGroup[],
+  personnelGroupsError: string | null,
+  shiftTeams: ShiftTeam[],
+  shiftTeamsError: string | null,
+  employments: Employment[],
+  employmentsError: string | null,
+  personnel: PersonnelRow[],
+  personnelError: string | null,
   currentUserIsAdmin: boolean,
 ) {
+  if (activeItem === "Perioder") {
+    return (
+      <PeriodOverviewSection
+        personnel={personnel}
+        loadError={personnelError}
+      />
+    );
+  }
+
   if (activeItem === "Adgangsstyring") {
     return (
       <AccessManagementSection
@@ -35,6 +77,52 @@ function renderSection(
         loadError={usersError}
         currentUserIsAdmin={currentUserIsAdmin}
       />
+    );
+  }
+
+  if (activeItem === "Afsnit") {
+    return (
+      <DepartmentSection
+        departments={departments}
+        loadError={departmentsError}
+      />
+    );
+  }
+
+  if (activeItem === "Personalegrupper") {
+    return (
+      <PersonnelGroupSection
+        groups={personnelGroups}
+        loadError={personnelGroupsError}
+      />
+    );
+  }
+
+  if (activeItem === "Vagtlag") {
+    return (
+      <ShiftTeamSection
+        shiftTeams={shiftTeams}
+        loadError={shiftTeamsError}
+      />
+    );
+  }
+
+  if (activeItem === "Ansaettelser") {
+    return (
+      <EmploymentSection
+        employments={employments}
+        users={users}
+        departments={departments}
+        personnelGroups={personnelGroups}
+        shiftTeams={shiftTeams}
+        loadError={employmentsError}
+      />
+    );
+  }
+
+  if (activeItem === "Personale") {
+    return (
+      <PersonnelSection personnel={personnel} loadError={personnelError} />
     );
   }
 
@@ -49,6 +137,16 @@ export function HomePage({
   connected,
   users,
   usersError,
+  departments,
+  departmentsError,
+  personnelGroups,
+  personnelGroupsError,
+  shiftTeams,
+  shiftTeamsError,
+  employments,
+  employmentsError,
+  personnel,
+  personnelError,
   currentUserIsAdmin,
 }: HomePageProps) {
   return (
@@ -83,6 +181,16 @@ export function HomePage({
                   activeItem,
                   users,
                   usersError,
+                  departments,
+                  departmentsError,
+                  personnelGroups,
+                  personnelGroupsError,
+                  shiftTeams,
+                  shiftTeamsError,
+                  employments,
+                  employmentsError,
+                  personnel,
+                  personnelError,
                   currentUserIsAdmin,
                 )}
               </div>

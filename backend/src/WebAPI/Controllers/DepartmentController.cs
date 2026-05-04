@@ -1,43 +1,39 @@
-﻿using Domain.DTO;
+using Domain.DTO;
 using Domain.Entities;
-using Domain.Interfaces.Services;
 using Infrastructure.Mapping;
 using Infrastructure.Persistence.Contexts;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-
-
 namespace WebAPI.Controllers
 {
-	[ApiController]
-	[Route("api/departments")]
-	public class DepartmentController : ControllerBase
-	{
-		private readonly VagtplanDbContext _context;
-		private readonly ILogger<DepartmentController> _logger;
+    [ApiController]
+    [Route("api/departments")]
+    public class DepartmentController : ControllerBase
+    {
+        private readonly VagtplanDbContext _context;
+        private readonly ILogger<DepartmentController> _logger;
 
+        public DepartmentController(VagtplanDbContext context, ILogger<DepartmentController> logger)
+        {
+            _context = context;
+            _logger = logger;
+        }
 
-		public DepartmentController(VagtplanDbContext context, ILogger<DepartmentController> logger)
-		{
-			_context = context;
-			_logger = logger;
-		}
-
-		[HttpGet("{departmentId}")]
-		public async Task<IActionResult> GetDepartment(Guid departmentId)
-		{
-			try
-			{
-				if (departmentId == Guid.Empty)
-				{
-                    _logger.LogWarning("Department id was null");
+        [HttpGet("{departmentId}")]
+        public async Task<IActionResult> GetDepartment(Guid departmentId)
+        {
+            try
+            {
+                if (departmentId == Guid.Empty)
+                {
+                    _logger.LogWarning("Department id was empty");
                     return NotFound(new { message = "Department id not found" });
                 }
 
                 var department = await _context.Departments
-					.AsNoTracking()
-					.FirstOrDefaultAsync(x => x.Id == departmentId);
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.Id == departmentId);
 
                 if (department == null)
                 {
@@ -45,159 +41,184 @@ namespace WebAPI.Controllers
                     return NotFound(new { message = "Department not found" });
                 }
 
-
                 return Ok(department.ToDTO());
             }
-
             catch (DbUpdateException dbEx)
             {
-                _logger.LogError(dbEx, "Database error occurred retrieving department {departmentId}", departmentId);
+                _logger.LogError(dbEx, "Database error occurred retrieving department {DepartmentId}", departmentId);
                 return StatusCode(500, new { message = "A database error occurred" });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error retrieving department {departmentId}", departmentId);
+                _logger.LogError(ex, "Error retrieving department {DepartmentId}", departmentId);
                 return StatusCode(500, new { message = "An unexpected error occurred" });
             }
         }
 
-		[HttpGet]
-		public async Task<IActionResult> GetAll()
-		{
-			try
-			{
+        [HttpGet]
+        public async Task<IActionResult> GetAll()
+        {
+            try
+            {
                 var departments = await _context.Departments
-                .AsNoTracking()
-                .ToListAsync();
-
-                if (!departments.Any())
-                {
-                    _logger.LogWarning("Departments not found");
-                    return NotFound(new { message = "Departments not found" });
-                }
+                    .AsNoTracking()
+                    .OrderBy(department => department.Name)
+                    .Select(department => new DepartmentAdminDto
+                    {
+                        Id = department.Id,
+                        Name = department.Name,
+                        Color = department.Address,
+                    })
+                    .ToListAsync();
 
                 return Ok(departments);
             }
-			
-			catch (DbUpdateException dbEx)
-			{
-				_logger.LogError(dbEx, "Database error occurred retrieving list of departments");
-				return StatusCode(500, new { message = "A database error occured" });
-			}
+            catch (DbUpdateException dbEx)
+            {
+                _logger.LogError(dbEx, "Database error occurred retrieving list of departments");
+                return StatusCode(500, new { message = "A database error occurred" });
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error retrieving departments");
                 return StatusCode(500, new { message = "An unexpected error occurred" });
             }
-
         }
 
-		[HttpPost]
-		public async Task<IActionResult> AddDepartment([FromBody] DepartmentDTO entity)
-		{
-			try
-			{
-				if (entity == null)
-				{
-                    _logger.LogWarning("Entity was null");
-                    return BadRequest(new { message = "Entity wasnt given" });
+        [HttpPost]
+        public async Task<IActionResult> AddDepartment([FromBody] DepartmentAdminDto dto)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return ValidationProblem(ModelState);
                 }
 
-				var department = DepartmentMapping.ToEntity(entity);
+                if (string.IsNullOrWhiteSpace(dto.Name) || string.IsNullOrWhiteSpace(dto.Color))
+                {
+                    return BadRequest(new { message = "Navn og afdeling er påkrævet." });
+                }
 
-				await _context.Departments.AddAsync(department);
-				await _context.SaveChangesAsync();
+                var department = new Department
+                {
+                    Id = Guid.NewGuid(),
+                    Name = dto.Name.Trim(),
+                    Address = dto.Color.Trim(),
+                    DepartmentTypeId = null,
+                };
 
+                await _context.Departments.AddAsync(department);
+                await _context.SaveChangesAsync();
 
-				return Ok(department.ToDTO());
+                return Ok(ToDepartmentAdminDto(department));
             }
-
             catch (DbUpdateException dbEx)
             {
                 _logger.LogError(dbEx, "Database error occurred while creating department");
-                return StatusCode(500, new { message = "A database error occured" });
+                return StatusCode(500, new { message = "A database error occurred" });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating department");
                 return StatusCode(500, new { message = "An unexpected error occurred" });
             }
+        }
 
-
-		}
-
-		[HttpPut]
-		public async Task<IActionResult> UpdateDepartment([FromBody] Department entity)
-		{
-			try
-			{
-				var DepartmentToUpdate = await _context.Departments.FindAsync(entity.Id);
-
-				if (DepartmentToUpdate == null)
-				{
-                    _logger.LogWarning("Id on department not found");
-                    return BadRequest(new { message = "No department contains the Id provided" });
+        [HttpPut("{id:guid}")]
+        public async Task<IActionResult> UpdateDepartment(Guid id, [FromBody] DepartmentAdminDto dto)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return ValidationProblem(ModelState);
                 }
 
-				//Opdaterer de 3 attributter
-				DepartmentToUpdate.Name = entity.Name;
-				DepartmentToUpdate.Address = entity.Address;
-				DepartmentToUpdate.DepartmentTypeId = entity.DepartmentTypeId;
+                if (string.IsNullOrWhiteSpace(dto.Name) || string.IsNullOrWhiteSpace(dto.Color))
+                {
+                    return BadRequest(new { message = "Navn og afdeling er påkrævet." });
+                }
 
-				await _context.SaveChangesAsync();
+                var departmentToUpdate = await _context.Departments.FindAsync(id);
+                if (departmentToUpdate == null)
+                {
+                    _logger.LogWarning("Department {DepartmentId} not found", id);
+                    return BadRequest(new { message = "Det valgte afsnit blev ikke fundet." });
+                }
 
-				return Ok(DepartmentToUpdate.ToDTO());
+                departmentToUpdate.Name = dto.Name.Trim();
+                departmentToUpdate.Address = dto.Color.Trim();
 
-			}
+                await _context.SaveChangesAsync();
 
+                return Ok(ToDepartmentAdminDto(departmentToUpdate));
+            }
             catch (DbUpdateException dbEx)
             {
                 _logger.LogError(dbEx, "Database error occurred while editing department");
-                return StatusCode(500, new { message = "A database error occured" });
+                return StatusCode(500, new { message = "A database error occurred" });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error editing department");
                 return StatusCode(500, new { message = "An unexpected error occurred" });
             }
+        }
 
-		}
-
-        [HttpDelete("{id}")]
+        [HttpDelete("{id:guid}")]
         public async Task<IActionResult> DeleteDepartment(Guid id)
         {
             try
             {
-                if (id == default)
+                if (id == Guid.Empty)
                 {
-                    _logger.LogWarning("Id was null.");
-                    return BadRequest(new { message = "Id wasnt provided." });
+                    _logger.LogWarning("Department id was empty");
+                    return BadRequest(new { message = "Id blev ikke angivet." });
                 }
 
                 var departmentToDelete = await _context.Departments.FindAsync(id);
-
                 if (departmentToDelete == null)
                 {
-                    _logger.LogWarning("Found no corresponding department");
-                    return BadRequest(new { message = "No department has the Id provided." });
+                    _logger.LogWarning("Department {DepartmentId} not found", id);
+                    return BadRequest(new { message = "Det valgte afsnit blev ikke fundet." });
+                }
+
+                var hasLinkedEmployments = await _context.EmploymentPeriods
+                    .AsNoTracking()
+                    .AnyAsync(employment => employment.DepartmentId == id);
+
+                if (hasLinkedEmployments)
+                {
+                    return Conflict(new
+                    {
+                        message = "Afsnittet kan ikke slettes, fordi der findes tilknyttede ansættelser.",
+                    });
                 }
 
                 _context.Departments.Remove(departmentToDelete);
                 await _context.SaveChangesAsync();
 
-                return Ok(departmentToDelete.ToDTO());
+                return Ok(ToDepartmentAdminDto(departmentToDelete));
             }
-
             catch (DbUpdateException dbEx)
             {
-                _logger.LogError(dbEx, "Database error occurred while creating department");
-                return StatusCode(500, new { message = "A database error occured" });
+                _logger.LogError(dbEx, "Database error occurred while deleting department");
+                return StatusCode(500, new { message = "A database error occurred" });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creating department");
+                _logger.LogError(ex, "Error deleting department");
                 return StatusCode(500, new { message = "An unexpected error occurred" });
             }
         }
+
+        private static DepartmentAdminDto ToDepartmentAdminDto(Department department) =>
+            new()
+            {
+                Id = department.Id,
+                Name = department.Name,
+                Color = department.Address,
+            };
     }
 }
