@@ -9,6 +9,7 @@ type HomePageProps = {
   connected: boolean;
   users: AccessManagementUser[];
   usersError: string | null;
+  currentUserIsAdmin: boolean;
 };
 
 const titles: Record<HomeSidebarItem, string> = {
@@ -25,9 +26,16 @@ function renderSection(
   activeItem: HomeSidebarItem,
   users: AccessManagementUser[],
   usersError: string | null,
+  currentUserIsAdmin: boolean,
 ) {
   if (activeItem === "Adgangsstyring") {
-    return <AccessManagementSection users={users} loadError={usersError} />;
+    return (
+      <AccessManagementSection
+        users={users}
+        loadError={usersError}
+        currentUserIsAdmin={currentUserIsAdmin}
+      />
+    );
   }
 
   return (
@@ -37,7 +45,12 @@ function renderSection(
   );
 }
 
-export function HomePage({ connected, users, usersError }: HomePageProps) {
+export function HomePage({
+  connected,
+  users,
+  usersError,
+  currentUserIsAdmin,
+}: HomePageProps) {
   return (
     <main className="min-h-screen bg-[#f4f1ea] p-4 text-slate-900 md:p-6">
       <div className="mx-auto grid max-w-7xl gap-4 lg:min-h-[calc(100vh-3rem)] lg:grid-cols-[280px_minmax(0,1fr)]">
@@ -65,7 +78,14 @@ export function HomePage({ connected, users, usersError }: HomePageProps) {
                 </div>
               </div>
 
-              <div className="mt-6">{renderSection(activeItem, users, usersError)}</div>
+              <div className="mt-6">
+                {renderSection(
+                  activeItem,
+                  users,
+                  usersError,
+                  currentUserIsAdmin,
+                )}
+              </div>
             </section>
           )}
         </HomeSidebar>

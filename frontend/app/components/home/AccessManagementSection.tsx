@@ -6,6 +6,7 @@ import type { AccessManagementUser } from "../../services/apiService";
 type AccessManagementSectionProps = {
   users: AccessManagementUser[];
   loadError: string | null;
+  currentUserIsAdmin: boolean;
 };
 
 type MutationResult =
@@ -25,8 +26,10 @@ type MutationResult =
     };
 
 type UserFormState = {
-  fullName: string;
+  firstName: string;
+  lastName: string;
   email: string;
+  password: string;
   isAdmin: boolean;
   isStaff: boolean;
 };
@@ -38,8 +41,10 @@ type PopupPosition = {
 };
 
 const emptyFormState: UserFormState = {
-  fullName: "",
+  firstName: "",
+  lastName: "",
   email: "",
+  password: "",
   isAdmin: false,
   isStaff: true,
 };
@@ -47,6 +52,7 @@ const emptyFormState: UserFormState = {
 export function AccessManagementSection({
   users,
   loadError,
+  currentUserIsAdmin,
 }: AccessManagementSectionProps) {
   const fetcher = useFetcher<MutationResult>();
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -77,7 +83,10 @@ export function AccessManagementSection({
         const otherRows = currentRows.filter((user) => user.id !== result.user.id);
 
         return [...otherRows, result.user].sort((left, right) =>
-          left.fullName.localeCompare(right.fullName, "da-DK"),
+          `${left.firstName} ${left.lastName}`.localeCompare(
+            `${right.firstName} ${right.lastName}`,
+            "da-DK",
+          ),
         );
       });
     }
@@ -98,7 +107,7 @@ export function AccessManagementSection({
 
       const rect = button.getBoundingClientRect();
       const viewportPadding = 16;
-      const preferredWidth = Math.min(448, window.innerWidth - viewportPadding * 2);
+      const preferredWidth = Math.min(520, window.innerWidth - viewportPadding * 2);
       const left = Math.min(
         rect.right - preferredWidth,
         window.innerWidth - preferredWidth - viewportPadding,
@@ -146,6 +155,7 @@ export function AccessManagementSection({
     (fetcher.data && !fetcher.data.ok ? fetcher.data.error : null);
   const isSubmitting = fetcher.state !== "idle";
   const isEditing = editingUserId !== null;
+  const nameFieldsAreReadOnly = isEditing && !currentUserIsAdmin;
 
   function openCreatePopup() {
     setEditingUserId(null);
@@ -156,8 +166,10 @@ export function AccessManagementSection({
   function startEdit(user: AccessManagementUser) {
     setEditingUserId(user.id);
     setFormState({
-      fullName: user.fullName,
+      firstName: user.firstName,
+      lastName: user.lastName,
       email: user.email,
+      password: "",
       isAdmin: user.isAdmin,
       isStaff: user.isStaff,
     });
@@ -203,7 +215,7 @@ export function AccessManagementSection({
                   {isEditing ? "Redigér bruger" : "Tilføj bruger"}
                 </h3>
                 <p className="mt-1 text-sm text-slate-600">
-                  Navn, e-mail og roller.
+                  Fornavn, efternavn, e-mail, adgangskode og roller.
                 </p>
               </div>
 
@@ -227,23 +239,61 @@ export function AccessManagementSection({
                 <input type="hidden" name="userId" value={editingUserId} />
               ) : null}
 
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-slate-700">
-                  Navn
-                </span>
-                <input
-                  name="fullName"
-                  required
-                  value={formState.fullName}
-                  onChange={(event) =>
-                    setFormState((current) => ({
-                      ...current,
-                      fullName: event.target.value,
-                    }))
-                  }
-                  className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-amber-500"
-                />
-              </label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-700">
+                    Fornavn
+                  </span>
+                  <input
+                    name="firstName"
+                    required
+                    readOnly={nameFieldsAreReadOnly}
+                    aria-readonly={nameFieldsAreReadOnly}
+                    value={formState.firstName}
+                    onChange={(event) =>
+                      setFormState((current) => ({
+                        ...current,
+                        firstName: event.target.value,
+                      }))
+                    }
+                    className={`w-full rounded-2xl border px-4 py-3 text-sm outline-none transition ${
+                      nameFieldsAreReadOnly
+                        ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-500"
+                        : "border-slate-300 bg-white text-slate-900 focus:border-amber-500"
+                    }`}
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-700">
+                    Efternavn
+                  </span>
+                  <input
+                    name="lastName"
+                    required
+                    readOnly={nameFieldsAreReadOnly}
+                    aria-readonly={nameFieldsAreReadOnly}
+                    value={formState.lastName}
+                    onChange={(event) =>
+                      setFormState((current) => ({
+                        ...current,
+                        lastName: event.target.value,
+                      }))
+                    }
+                    className={`w-full rounded-2xl border px-4 py-3 text-sm outline-none transition ${
+                      nameFieldsAreReadOnly
+                        ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-500"
+                        : "border-slate-300 bg-white text-slate-900 focus:border-amber-500"
+                    }`}
+                  />
+                </label>
+              </div>
+
+              {nameFieldsAreReadOnly ? (
+                <p className="text-xs text-slate-500">
+                  Kun brugere med admin-rettigheder kan ændre navn.
+                </p>
+              ) : null}
 
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-slate-700">
@@ -258,6 +308,30 @@ export function AccessManagementSection({
                     setFormState((current) => ({
                       ...current,
                       email: event.target.value,
+                    }))
+                  }
+                  className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-amber-500"
+                />
+              </label>
+
+              <label className="block">
+                <div className="mb-2 flex items-center justify-between gap-4">
+                  <span className="block text-sm font-medium text-slate-700">
+                    Adgangskode
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    {isEditing ? "Udfyld kun for at ændre" : "Påkrævet"}
+                  </span>
+                </div>
+                <input
+                  name="password"
+                  type="password"
+                  required={!isEditing}
+                  value={formState.password}
+                  onChange={(event) =>
+                    setFormState((current) => ({
+                      ...current,
+                      password: event.target.value,
                     }))
                   }
                   className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-amber-500"
@@ -336,9 +410,6 @@ export function AccessManagementSection({
         <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-xl font-semibold text-slate-950">Brugere</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Tabelvisning med mulighed for tilføj, redigér og slet.
-            </p>
           </div>
 
           <div className="flex items-center gap-3">
@@ -386,7 +457,7 @@ export function AccessManagementSection({
                 rows.map((user) => (
                   <tr key={user.id} className="hover:bg-slate-50">
                     <td className="px-5 py-4 font-medium text-slate-900">
-                      {user.fullName}
+                      {user.firstName} {user.lastName}
                     </td>
                     <td className="px-5 py-4">{user.email}</td>
                     <td className="px-5 py-4">{user.isAdmin ? "Ja" : "Nej"}</td>

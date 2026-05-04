@@ -40,22 +40,29 @@ namespace WebAPI.Controllers
                 var users = await _context.Users
                     .AsNoTracking()
                     .OrderBy(u => u.FullName)
-                    .Select(u => new AccessManagementUserDto
-                    {
-                        Id = u.Id,
-                        FullName = u.FullName,
-                        Email = u.Email ?? string.Empty,
-                    })
                     .ToListAsync();
 
-                var userIds = users.Select(u => u.Id).ToList();
+                var result = users.Select(user =>
+                {
+                    var (firstName, lastName) = SplitName(user.FullName);
+
+                    return new AccessManagementUserDto
+                    {
+                        Id = user.Id,
+                        FirstName = firstName,
+                        LastName = lastName,
+                        Email = user.Email ?? string.Empty,
+                    };
+                }).ToList();
+
+                var userIds = result.Select(u => u.Id).ToList();
                 var roleClaims = await _context.UserClaims
                     .AsNoTracking()
                     .Where(claim => userIds.Contains(claim.UserId) &&
                         (claim.ClaimType == AdminClaimType || claim.ClaimType == StaffClaimType))
                     .ToListAsync();
 
-                foreach (var user in users)
+                foreach (var user in result)
                 {
                     user.IsAdmin = roleClaims.Any(claim =>
                         claim.UserId == user.Id &&
@@ -68,7 +75,7 @@ namespace WebAPI.Controllers
                         string.Equals(claim.ClaimValue, bool.TrueString, StringComparison.OrdinalIgnoreCase));
                 }
 
-                return Ok(users);
+                return Ok(result);
             }
             catch (DbException dbEx)
             {
@@ -83,7 +90,7 @@ namespace WebAPI.Controllers
         }
 
         [HttpPost("access-management")]
-        public async Task<IActionResult> CreateAccessManagementUser([FromBody] AccessManagementUserDto dto)
+        public async Task<IActionResult> CreateAccessManagementUser([FromBody] AccessManagementUserUpsertDto dto)
         {
             try
             {
@@ -92,12 +99,15 @@ namespace WebAPI.Controllers
                     return ValidationProblem(ModelState);
                 }
 
-                var normalizedEmail = NormalizeEmail(dto.Email);
-                if (string.IsNullOrWhiteSpace(dto.FullName) || string.IsNullOrWhiteSpace(dto.Email))
+                if (string.IsNullOrWhiteSpace(dto.FirstName) ||
+                    string.IsNullOrWhiteSpace(dto.LastName) ||
+                    string.IsNullOrWhiteSpace(dto.Email) ||
+                    string.IsNullOrWhiteSpace(dto.Password))
                 {
-                    return BadRequest(new { message = "Navn og e-mail er påkrævet." });
+                    return BadRequest(new { message = "Fornavn, efternavn, e-mail og adgangskode er påkrævet." });
                 }
 
+                var normalizedEmail = NormalizeEmail(dto.Email);
                 var emailExists = await _context.Users.AnyAsync(user =>
                     user.NormalizedEmail == normalizedEmail || user.NormalizedUserName == normalizedEmail);
 
@@ -106,11 +116,12 @@ namespace WebAPI.Controllers
                     return Conflict(new { message = "E-mail findes allerede." });
                 }
 
+                var fullName = BuildFullName(dto.FirstName, dto.LastName);
                 var user = new User
                 {
                     Id = Guid.NewGuid(),
-                    FullName = dto.FullName.Trim(),
-                    Initials = CreateInitials(dto.FullName),
+                    FullName = fullName,
+                    Initials = CreateInitials(fullName),
                     Email = dto.Email.Trim(),
                     NormalizedEmail = normalizedEmail,
                     UserName = dto.Email.Trim(),
@@ -120,7 +131,7 @@ namespace WebAPI.Controllers
                     SecurityStamp = Guid.NewGuid().ToString(),
                 };
 
-                var result = await _userManager.CreateAsync(user);
+                var result = await _userManager.CreateAsync(user, dto.Password.Trim());
                 if (!result.Succeeded)
                 {
                     return BadRequest(new
@@ -146,7 +157,7 @@ namespace WebAPI.Controllers
         }
 
         [HttpPut("access-management/{id:guid}")]
-        public async Task<IActionResult> UpdateAccessManagementUser(Guid id, [FromBody] AccessManagementUserDto dto)
+        public async Task<IActionResult> UpdateAccessManagementUser(Guid id, [FromBody] AccessManagementUserUpsertDto dto)
         {
             try
             {
@@ -161,12 +172,14 @@ namespace WebAPI.Controllers
                     return NotFound(new { message = "Bruger blev ikke fundet." });
                 }
 
-                var normalizedEmail = NormalizeEmail(dto.Email);
-                if (string.IsNullOrWhiteSpace(dto.FullName) || string.IsNullOrWhiteSpace(dto.Email))
+                if (string.IsNullOrWhiteSpace(dto.FirstName) ||
+                    string.IsNullOrWhiteSpace(dto.LastName) ||
+                    string.IsNullOrWhiteSpace(dto.Email))
                 {
-                    return BadRequest(new { message = "Navn og e-mail er påkrævet." });
+                    return BadRequest(new { message = "Fornavn, efternavn og e-mail er påkrævet." });
                 }
 
+                var normalizedEmail = NormalizeEmail(dto.Email);
                 var emailExists = await _context.Users.AnyAsync(user =>
                     user.Id != id &&
                     (user.NormalizedEmail == normalizedEmail || user.NormalizedUserName == normalizedEmail));
@@ -176,8 +189,9 @@ namespace WebAPI.Controllers
                     return Conflict(new { message = "E-mail findes allerede." });
                 }
 
-                existingUser.FullName = dto.FullName.Trim();
-                existingUser.Initials = CreateInitials(dto.FullName);
+                var fullName = BuildFullName(dto.FirstName, dto.LastName);
+                existingUser.FullName = fullName;
+                existingUser.Initials = CreateInitials(fullName);
                 existingUser.Email = dto.Email.Trim();
                 existingUser.NormalizedEmail = normalizedEmail;
                 existingUser.UserName = dto.Email.Trim();
@@ -190,6 +204,23 @@ namespace WebAPI.Controllers
                     {
                         message = string.Join(" ", result.Errors.Select(error => error.Description)),
                     });
+                }
+
+                if (!string.IsNullOrWhiteSpace(dto.Password))
+                {
+                    var resetToken = await _userManager.GeneratePasswordResetTokenAsync(existingUser);
+                    var passwordResult = await _userManager.ResetPasswordAsync(
+                        existingUser,
+                        resetToken,
+                        dto.Password.Trim());
+
+                    if (!passwordResult.Succeeded)
+                    {
+                        return BadRequest(new
+                        {
+                            message = string.Join(" ", passwordResult.Errors.Select(error => error.Description)),
+                        });
+                    }
                 }
 
                 await SyncRoleClaimsAsync(existingUser, dto.IsAdmin, dto.IsStaff);
@@ -485,6 +516,27 @@ namespace WebAPI.Controllers
 
         private static string NormalizeEmail(string email) => email.Trim().ToUpperInvariant();
 
+        private static string BuildFullName(string firstName, string lastName) =>
+            $"{firstName.Trim()} {lastName.Trim()}".Trim();
+
+        private static (string FirstName, string LastName) SplitName(string fullName)
+        {
+            var parts = fullName
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            if (parts.Length == 0)
+            {
+                return (string.Empty, string.Empty);
+            }
+
+            if (parts.Length == 1)
+            {
+                return (parts[0], string.Empty);
+            }
+
+            return (parts[0], string.Join(" ", parts.Skip(1)));
+        }
+
         private static string CreateInitials(string fullName)
         {
             var initials = string.Concat(
@@ -505,11 +557,13 @@ namespace WebAPI.Controllers
         private async Task<AccessManagementUserDto> MapToAccessManagementUserAsync(User user)
         {
             var claims = await _userManager.GetClaimsAsync(user);
+            var (firstName, lastName) = SplitName(user.FullName);
 
             return new AccessManagementUserDto
             {
                 Id = user.Id,
-                FullName = user.FullName,
+                FirstName = firstName,
+                LastName = lastName,
                 Email = user.Email ?? string.Empty,
                 IsAdmin = HasClaimValue(claims, AdminClaimType),
                 IsStaff = HasClaimValue(claims, StaffClaimType),
@@ -548,7 +602,7 @@ namespace WebAPI.Controllers
             {
                 throw new InvalidOperationException(
                     $"Could not add claim '{claimType}' for user '{user.Id}'.");
-            }
+                }
         }
 
         private static bool HasClaimValue(IEnumerable<Claim> claims, string claimType) =>

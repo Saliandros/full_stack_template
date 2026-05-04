@@ -7,8 +7,18 @@ export type Department = {
 
 export type AccessManagementUser = {
   id: string;
-  fullName: string;
+  firstName: string;
+  lastName: string;
   email: string;
+  isAdmin: boolean;
+  isStaff: boolean;
+};
+
+export type AccessManagementUserInput = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password?: string;
   isAdmin: boolean;
   isStaff: boolean;
 };
@@ -50,14 +60,14 @@ export async function getAccessManagementUsers() {
 }
 
 export async function createAccessManagementUser(
-  user: Omit<AccessManagementUser, "id">,
+  user: AccessManagementUserInput,
 ) {
   return sendAccessManagementMutation("/api/user/access-management", "POST", user);
 }
 
 export async function updateAccessManagementUser(
   id: string,
-  user: Omit<AccessManagementUser, "id">,
+  user: AccessManagementUserInput,
 ) {
   return sendAccessManagementMutation(
     `/api/user/access-management/${id}`,
@@ -84,15 +94,20 @@ export async function deleteAccessManagementUser(id: string) {
 async function sendAccessManagementMutation(
   path: string,
   method: "POST" | "PUT",
-  user: Omit<AccessManagementUser, "id">,
+  user: AccessManagementUserInput,
 ) {
+  const payload = {
+    ...user,
+    password: user.password?.trim() ? user.password.trim() : undefined,
+  };
+
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
     method,
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
     },
-    body: JSON.stringify(user),
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {

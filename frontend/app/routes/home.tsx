@@ -20,19 +20,23 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  await requireUserSession(request);
+  const { userId } = await requireUserSession(request);
 
   try {
     const users = await getAccessManagementUsers();
+    const currentUserIsAdmin =
+      users.find((user) => user.id === userId)?.isAdmin ?? false;
 
     return {
       users,
+      currentUserIsAdmin,
       connected: true,
       usersError: null,
     };
   } catch (error) {
     return {
       users: [],
+      currentUserIsAdmin: false,
       connected: false,
       usersError:
         error instanceof Error
@@ -50,22 +54,29 @@ export async function action({ request }: Route.ActionArgs) {
     return destroyUserSession(request);
   }
 
-  await requireUserSession(request);
+  const { userId: currentUserId } = await requireUserSession(request);
 
-  const fullName = formData.get("fullName")?.toString().trim() ?? "";
+  let firstName = formData.get("firstName")?.toString().trim() ?? "";
+  let lastName = formData.get("lastName")?.toString().trim() ?? "";
   const email = formData.get("email")?.toString().trim() ?? "";
+  const password = formData.get("password")?.toString() ?? "";
   const isAdmin = formData.get("isAdmin") === "on";
   const isStaff = formData.get("isStaff") === "on";
 
   try {
     if (intent === "create") {
-      if (!fullName || !email) {
-        return { ok: false as const, error: "Navn og e-mail er påkrævet." };
+      if (!firstName || !lastName || !email || !password.trim()) {
+        return {
+          ok: false as const,
+          error: "Fornavn, efternavn, e-mail og adgangskode er påkrævet.",
+        };
       }
 
       const user = await createAccessManagementUser({
-        fullName,
+        firstName,
+        lastName,
         email,
+        password,
         isAdmin,
         isStaff,
       });
@@ -75,13 +86,32 @@ export async function action({ request }: Route.ActionArgs) {
 
     if (intent === "update") {
       const userId = formData.get("userId")?.toString() ?? "";
-      if (!userId || !fullName || !email) {
-        return { ok: false as const, error: "Navn og e-mail er påkrævet." };
+      if (!userId || !firstName || !lastName || !email) {
+        return {
+          ok: false as const,
+          error: "Fornavn, efternavn og e-mail er påkrævet.",
+        };
+      }
+
+      const users = await getAccessManagementUsers();
+      const currentUserIsAdmin =
+        users.find((user) => user.id === currentUserId)?.isAdmin ?? false;
+      const existingUser = users.find((user) => user.id === userId);
+
+      if (!existingUser) {
+        return { ok: false as const, error: "Bruger blev ikke fundet." };
+      }
+
+      if (!currentUserIsAdmin) {
+        firstName = existingUser.firstName;
+        lastName = existingUser.lastName;
       }
 
       const user = await updateAccessManagementUser(userId, {
-        fullName,
+        firstName,
+        lastName,
         email,
+        password,
         isAdmin,
         isStaff,
       });
@@ -103,7 +133,9 @@ export async function action({ request }: Route.ActionArgs) {
     return {
       ok: false as const,
       error:
-        error instanceof Error ? error.message : "Ukendt fejl ved gemning af bruger.",
+        error instanceof Error
+          ? error.message
+          : "Ukendt fejl ved gemning af bruger.",
     };
   }
 
@@ -111,7 +143,14 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { connected, users, usersError } = loaderData;
+  const { connected, users, usersError, currentUserIsAdmin } = loaderData;
 
-  return <HomePage connected={connected} users={users} usersError={usersError} />;
+  return (
+    <HomePage
+      connected={connected}
+      users={users}
+      usersError={usersError}
+      currentUserIsAdmin={currentUserIsAdmin}
+    />
+  );
 }
