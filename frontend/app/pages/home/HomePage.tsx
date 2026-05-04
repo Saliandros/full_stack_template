@@ -2,9 +2,13 @@ import {
   HomeSidebar,
   type HomeSidebarItem,
 } from "../../components/home/HomeSidebar";
+import { AccessManagementSection } from "../../components/home/AccessManagementSection";
+import type { AccessManagementUser } from "../../services/apiService";
 
 type HomePageProps = {
   connected: boolean;
+  users: AccessManagementUser[];
+  usersError: string | null;
 };
 
 const titles: Record<HomeSidebarItem, string> = {
@@ -17,7 +21,23 @@ const titles: Record<HomeSidebarItem, string> = {
   Personale: "Personale",
 };
 
-export function HomePage({ connected }: HomePageProps) {
+function renderSection(
+  activeItem: HomeSidebarItem,
+  users: AccessManagementUser[],
+  usersError: string | null,
+) {
+  if (activeItem === "Adgangsstyring") {
+    return <AccessManagementSection users={users} loadError={usersError} />;
+  }
+
+  return (
+    <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-10 text-sm text-slate-500">
+      {titles[activeItem]}
+    </div>
+  );
+}
+
+export function HomePage({ connected, users, usersError }: HomePageProps) {
   return (
     <main className="min-h-screen bg-[#f4f1ea] p-4 text-slate-900 md:p-6">
       <div className="mx-auto grid max-w-7xl gap-4 lg:min-h-[calc(100vh-3rem)] lg:grid-cols-[280px_minmax(0,1fr)]">
@@ -45,11 +65,7 @@ export function HomePage({ connected }: HomePageProps) {
                 </div>
               </div>
 
-              <div className="mt-6">
-                <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-10 text-sm text-slate-500">
-                  {titles[activeItem]}
-                </div>
-              </div>
+              <div className="mt-6">{renderSection(activeItem, users, usersError)}</div>
             </section>
           )}
         </HomeSidebar>

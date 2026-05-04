@@ -52,7 +52,7 @@ function SidebarMenuButton({
 }
 
 export function HomeSidebar({ children }: HomeSidebarProps) {
-  const [activeItem, setActiveItem] = useState<HomeSidebarItem>("Afsnit");
+  const [activeItem, setActiveItem] = useState<HomeSidebarItem>("Adgangsstyring");
 
   return (
     <>

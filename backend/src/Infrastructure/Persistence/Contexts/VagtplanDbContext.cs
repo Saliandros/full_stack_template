@@ -12,6 +12,9 @@ namespace Infrastructure.Persistence.Contexts
 {
     public class VagtplanDbContext : IdentityDbContext<User, IdentityRole<Guid>, Guid>
     {
+        private const string AdminClaimType = "is_admin";
+        private const string StaffClaimType = "is_staff";
+
         private readonly ILogger<VagtplanDbContext> _logger;
 
         public VagtplanDbContext(DbContextOptions<VagtplanDbContext> options, ILogger<VagtplanDbContext> logger)
@@ -205,6 +208,39 @@ namespace Infrastructure.Persistence.Contexts
                     SaveChanges();
                     _logger.LogInformation("Added Employment Periods for users");
                 }
+            }
+
+            var seededAdmin = Users.FirstOrDefault(user => user.Email == "admin@hospital.dk");
+            var seededUser = Users.FirstOrDefault(user => user.Email == "user@hospital.dk");
+
+            if (seededAdmin != null)
+            {
+                EnsureBooleanClaim(seededAdmin.Id, AdminClaimType, true);
+                EnsureBooleanClaim(seededAdmin.Id, StaffClaimType, true);
+            }
+
+            if (seededUser != null)
+            {
+                EnsureBooleanClaim(seededUser.Id, AdminClaimType, false);
+                EnsureBooleanClaim(seededUser.Id, StaffClaimType, true);
+            }
+        }
+
+        private void EnsureBooleanClaim(Guid userId, string claimType, bool value)
+        {
+            var existingClaims = UserClaims.Where(claim => claim.UserId == userId && claim.ClaimType == claimType);
+
+            if (!existingClaims.Any(claim =>
+                string.Equals(claim.ClaimValue, value.ToString(), StringComparison.OrdinalIgnoreCase)))
+            {
+                UserClaims.RemoveRange(existingClaims);
+                UserClaims.Add(new IdentityUserClaim<Guid>
+                {
+                    UserId = userId,
+                    ClaimType = claimType,
+                    ClaimValue = value.ToString(),
+                });
+                SaveChanges();
             }
         }
     }
